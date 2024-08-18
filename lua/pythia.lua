@@ -3,7 +3,7 @@ local Job = require("plenary.job")
 
 -- Add a new function for logging
 local function log_debug(message)
-	local log_file = io.open(vim.fn.stdpath("data") .. "/llm_debug.log", "a")
+	local log_file = io.open(vim.fn.stdpath("data") .. "/pythia_debug.log", "a")
 	if log_file then
 		log_file:write(os.date("%Y-%m-%d %H:%M:%S") .. " " .. message .. "\n")
 		log_file:close()
