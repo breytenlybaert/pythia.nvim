@@ -1,6 +1,15 @@
 local M = {}
 local Job = require("plenary.job")
 
+-- Add a new function for logging
+local function log_debug(message)
+	local log_file = io.open(vim.fn.stdpath("data") .. "/llm_debug.log", "a")
+	if log_file then
+		log_file:write(os.date("%Y-%m-%d %H:%M:%S") .. " " .. message .. "\n")
+		log_file:close()
+	end
+end
+
 local function get_api_key(name)
 	local key = os.getenv(name)
 	print("Debug: API key for " .. name .. " is " .. (key and "set" or "not set"))
@@ -57,7 +66,7 @@ function M.get_visual_selection()
 end
 
 function M.make_anthropic_spec_curl_args(opts, prompt, system_prompt)
-	print("Debug: Entering make_anthropic_spec_curl_args")
+	log_debug("Entering make_anthropic_spec_curl_args")
 	local url = opts.url
 	local api_key = opts.api_key_name and get_api_key(opts.api_key_name)
 	local data = {
@@ -67,7 +76,7 @@ function M.make_anthropic_spec_curl_args(opts, prompt, system_prompt)
 		stream = true,
 		max_tokens = 4096,
 	}
-	print("Debug: Data payload: " .. vim.inspect(data))
+	log_debug("Data payload: " .. vim.inspect(data))
 	local args = { "-N", "-X", "POST", "-H", "Content-Type: application/json", "-d", vim.json.encode(data) }
 	if api_key then
 		table.insert(args, "-H")
@@ -75,10 +84,10 @@ function M.make_anthropic_spec_curl_args(opts, prompt, system_prompt)
 		table.insert(args, "-H")
 		table.insert(args, "anthropic-version: 2023-06-01")
 	else
-		print("Debug: API key is not set")
+		log_debug("API key is not set")
 	end
 	table.insert(args, url)
-	print("Debug: Curl args: " .. vim.inspect(args))
+	log_debug("Curl args: " .. vim.inspect(args))
 	return args
 end
 
@@ -138,17 +147,17 @@ local function get_prompt(opts)
 end
 
 function M.handle_anthropic_spec_data(data_stream, event_state)
-	print("Debug: Handling Anthropic data stream: " .. data_stream)
+	log_debug("Handling Anthropic data stream: " .. data_stream)
 	if event_state == "content_block_delta" then
 		local json = vim.json.decode(data_stream)
 		if json.delta and json.delta.text then
-			print("Debug: Writing text: " .. json.delta.text)
+			log_debug("Writing text: " .. json.delta.text)
 			M.write_string_at_cursor(json.delta.text)
 		else
-			print("Debug: No text in delta")
+			log_debug("No text in delta")
 		end
 	else
-		print("Debug: Event state is not content_block_delta: " .. tostring(event_state))
+		log_debug("Event state is not content_block_delta: " .. tostring(event_state))
 	end
 end
 
@@ -168,7 +177,7 @@ local group = vim.api.nvim_create_augroup("DING_LLM_AutoGroup", { clear = true }
 local active_job = nil
 
 function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_data_fn)
-	print("Debug: Invoking LLM and streaming into editor")
+	log_debug("Invoking LLM and streaming into editor")
 	vim.api.nvim_clear_autocmds({ group = group })
 	local prompt = get_prompt(opts)
 	local system_prompt = opts.system_prompt
@@ -177,16 +186,16 @@ function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_dat
 	local curr_event_state = nil
 
 	local function parse_and_call(line)
-		print("Debug: Parsing line: " .. line)
+		log_debug("Parsing line: " .. line)
 		local event = line:match("^event: (.+)$")
 		if event then
 			curr_event_state = event
-			print("Debug: Event state set to: " .. event)
+			log_debug("Event state set to: " .. event)
 			return
 		end
 		local data_match = line:match("^data: (.+)$")
 		if data_match then
-			print("Debug: Calling handle_data_fn with data: " .. data_match)
+			log_debug("Calling handle_data_fn with data: " .. data_match)
 			handle_data_fn(data_match, curr_event_state)
 		end
 	end
@@ -203,10 +212,10 @@ function M.invoke_llm_and_stream_into_editor(opts, make_curl_args_fn, handle_dat
 			parse_and_call(out)
 		end,
 		on_stderr = function(_, err)
-			print("Debug: Curl stderr: " .. err)
+			log_debug("Curl stderr: " .. err)
 		end,
 		on_exit = function(_, code)
-			print("Debug: Curl job exited with code: " .. code)
+			log_debug("Curl job exited with code: " .. code)
 			active_job = nil
 		end,
 	})
