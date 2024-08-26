@@ -51,41 +51,42 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 		end
 	end
 
-	-- Function to handle job output
+	local buffer = ""
 	local function on_stdout(_, data)
 		if data then
-			-- Open a debug file
 			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
 
 			for _, chunk in ipairs(data) do
-				-- Write the raw chunk to the debug file
 				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
+				buffer = buffer .. chunk
 
-				for char in chunk:gmatch(".") do
-					-- Write each character to the debug file
-					debug_file:write("Char: " .. vim.inspect(char) .. "\n")
+				-- Process complete sentences or lines
+				while true do
+					local sentence_end = buffer:find("[%.%?%!]%s")
+					local line_break = buffer:find("\n")
+					local end_index = sentence_end or line_break
 
-					if char == "\n" then
-						-- Move to the next line
-						row = row + 1
-						col = 0
-						-- If we're at the end of the buffer, add a new line
-						if row == vim.api.nvim_buf_line_count(0) then
-							vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-						end
-						debug_file:write("Newline detected, row: " .. row .. ", col: " .. col .. "\n")
-					else
-						-- Insert the character at the current cursor position
-						vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
-						col = col + 1
-						debug_file:write("Character inserted, row: " .. row .. ", col: " .. col .. "\n")
+					if not end_index then
+						break
+					end
+
+					local line = buffer:sub(1, end_index)
+					buffer = buffer:sub(end_index + 1)
+
+					-- Trim leading/trailing whitespace
+					line = line:gsub("^%s*(.-)%s*$", "%1")
+
+					if line ~= "" then
+						-- Insert the line at the current cursor position
+						vim.api.nvim_buf_set_lines(0, -1, -1, false, { line })
+						debug_file:write("Line inserted: " .. vim.inspect(line) .. "\n")
+
+						-- Move cursor to the end of the buffer
+						local last_line = vim.api.nvim_buf_line_count(0)
+						vim.api.nvim_win_set_cursor(0, { last_line, 0 })
 					end
 				end
 			end
-
-			-- Update the cursor position
-			vim.api.nvim_win_set_cursor(0, { row + 1, col }) -- Convert back to 1-based index
-			debug_file:write("Cursor updated, row: " .. (row + 1) .. ", col: " .. col .. "\n")
 
 			-- Close the debug file
 			debug_file:close()
