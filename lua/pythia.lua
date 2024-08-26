@@ -13,13 +13,26 @@ local function find_insert_position()
 end
 
 -- Function to send text to llm and stream the result
-local function send_to_llm(text, replace_file)
+local function send_to_llm(text, replace_file, system_message, instruction, title)
 	-- Create a temporary file to store the input
 	local tmp_input = os.tmpname()
 
-	-- Write the input text to the temporary file
+	-- Prepare the input content
+	local input_content = ""
+	if system_message then
+		input_content = input_content .. "System: " .. system_message .. "\n\n"
+	end
+	if instruction then
+		input_content = input_content .. "Instruction: " .. instruction .. "\n\n"
+	end
+	if title then
+		input_content = input_content .. "Title: " .. title .. "\n\n"
+	end
+	input_content = input_content .. "Content:\n" .. text
+
+	-- Write the input content to the temporary file
 	local input_file = io.open(tmp_input, "w")
-	input_file:write(text)
+	input_file:write(input_content)
 	input_file:close()
 
 	-- Prepare buffer for output
@@ -81,13 +94,29 @@ end
 -- Function to send the entire file content to llm
 function M.send_file()
 	local content = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
-	send_to_llm(content, true) -- true indicates to replace the entire file
+	send_to_llm(content, true)
 end
 
 -- Function to send the yanked text to llm
 function M.send_yanked()
 	local yanked = vim.fn.getreg('"')
-	send_to_llm(yanked, false) -- false indicates to insert at the first empty line or end of buffer
+	send_to_llm(yanked, false)
+end
+
+-- New function to send file with instruction
+function M.send_file_with_instruction()
+	local content = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+	local title = vim.fn.expand("%:t") -- Get the current file name
+
+	-- Prompt for instruction
+	local instruction = vim.fn.input("Enter instruction: ")
+	if instruction == "" then
+		print("Cancelled")
+		return
+	end
+
+	-- Send to LLM with instruction
+	send_to_llm(content, true, "Answer only in code", instruction, title)
 end
 
 return M
