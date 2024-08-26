@@ -91,7 +91,6 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 			debug_file:close()
 		end
 	end
-
 	-- Function to clean up after job completion
 	local function on_exit()
 		os.remove(tmp_input)
