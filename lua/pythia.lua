@@ -60,23 +60,31 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
 				buffer = buffer .. chunk
 
-				-- Process complete lines
+				-- Process complete sentences or lines
 				while true do
-					local line_end = buffer:find("\n")
-					if not line_end then
+					local sentence_end = buffer:find("[%.%?%!]%s")
+					local line_break = buffer:find("\n")
+					local end_index = sentence_end or line_break
+
+					if not end_index then
 						break
 					end
 
-					local line = buffer:sub(1, line_end - 1)
-					buffer = buffer:sub(line_end + 1)
+					local line = buffer:sub(1, end_index)
+					buffer = buffer:sub(end_index + 1)
 
-					-- Insert the line at the end of the buffer
-					vim.api.nvim_buf_set_lines(0, -1, -1, false, { line })
-					debug_file:write("Line inserted: " .. vim.inspect(line) .. "\n")
+					-- Trim leading/trailing whitespace
+					line = line:gsub("^%s*(.-)%s*$", "%1")
 
-					-- Move cursor to the end of the buffer
-					local last_line = vim.api.nvim_buf_line_count(0)
-					vim.api.nvim_win_set_cursor(0, { last_line, 0 })
+					if line ~= "" then
+						-- Insert the line at the current cursor position
+						vim.api.nvim_buf_set_lines(0, -1, -1, false, { line })
+						debug_file:write("Line inserted: " .. vim.inspect(line) .. "\n")
+
+						-- Move cursor to the end of the buffer
+						local last_line = vim.api.nvim_buf_line_count(0)
+						vim.api.nvim_win_set_cursor(0, { last_line, 0 })
+					end
 				end
 			end
 
