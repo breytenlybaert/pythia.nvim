@@ -56,37 +56,41 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 		if data then
 			-- Open a debug file
 			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
-
 			for _, chunk in ipairs(data) do
 				-- Write the raw chunk to the debug file
 				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
 
-				for char in chunk:gmatch(".") do
-					-- Write each character to the debug file
-					debug_file:write("Char: " .. vim.inspect(char) .. "\n")
-
-					if char == "\n" then
-						-- Move to the next line
-						row = row + 1
-						col = 0
-						-- If we're at the end of the buffer, add a new line
-						if row == vim.api.nvim_buf_line_count(0) then
-							vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
+				if chunk == "" then
+					-- Create a new line when the chunk is an empty string
+					row = row + 1
+					col = 0
+					vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
+					debug_file:write("Empty chunk detected, new line created. row: " .. row .. ", col: " .. col .. "\n")
+				else
+					for char in chunk:gmatch(".") do
+						-- Write each character to the debug file
+						debug_file:write("Char: " .. vim.inspect(char) .. "\n")
+						if char == "\n" then
+							-- Move to the next line
+							row = row + 1
+							col = 0
+							-- If we're at the end of the buffer, add a new line
+							if row == vim.api.nvim_buf_line_count(0) then
+								vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
+							end
+							debug_file:write("Newline detected, row: " .. row .. ", col: " .. col .. "\n")
+						else
+							-- Insert the character at the current cursor position
+							vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
+							col = col + 1
+							debug_file:write("Character inserted, row: " .. row .. ", col: " .. col .. "\n")
 						end
-						debug_file:write("Newline detected, row: " .. row .. ", col: " .. col .. "\n")
-					else
-						-- Insert the character at the current cursor position
-						vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
-						col = col + 1
-						debug_file:write("Character inserted, row: " .. row .. ", col: " .. col .. "\n")
 					end
 				end
 			end
-
 			-- Update the cursor position
 			vim.api.nvim_win_set_cursor(0, { row + 1, col }) -- Convert back to 1-based index
 			debug_file:write("Cursor updated, row: " .. (row + 1) .. ", col: " .. col .. "\n")
-
 			-- Close the debug file
 			debug_file:close()
 		end
