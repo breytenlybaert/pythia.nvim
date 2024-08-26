@@ -54,41 +54,23 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 	-- Function to handle job output
 	local function on_stdout(_, data)
 		if data then
-			local buffer = ""
 			for _, chunk in ipairs(data) do
-				buffer = buffer .. chunk
-				while true do
-					local line_end = buffer:find("[\r\n]")
-					if not line_end then
-						break
+				for char in chunk:gmatch(".") do
+					if char == "\n" then
+						-- Move to the next line
+						row = row + 1
+						col = 0
+						-- If we're at the end of the buffer, add a new line
+						if row == vim.api.nvim_buf_line_count(0) then
+							vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
+						end
+					else
+						-- Insert the character at the current cursor position
+						vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
+						col = col + 1
 					end
-
-					local line = buffer:sub(1, line_end - 1)
-					buffer = buffer:sub(line_end + 1)
-
-					-- Remove any trailing \r if present (handles \r\n line endings)
-					line = line:gsub("\r$", "")
-
-					-- Insert the line at the current cursor position
-					vim.api.nvim_buf_set_lines(0, row, row + 1, false, { line })
-					row = row + 1
-
-					-- If we're at the end of the buffer, add a new line
-					if row == vim.api.nvim_buf_line_count(0) then
-						vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-					end
-				end
-
-				-- Handle any remaining characters in the buffer
-				if #buffer > 0 then
-					local current_line = vim.api.nvim_buf_get_lines(0, row, row + 1, false)[1]
-					vim.api.nvim_buf_set_lines(0, row, row + 1, false, { current_line .. buffer })
-					col = #current_line + #buffer
-				else
-					col = 0
 				end
 			end
-
 			-- Update the cursor position
 			vim.api.nvim_win_set_cursor(0, { row + 1, col }) -- Convert back to 1-based index
 		end
