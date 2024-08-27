@@ -51,38 +51,45 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 		end
 	end
 
+	local buffer = ""
 	local function on_stdout(_, data)
 		if data then
-			local buffer_line = ""
+			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
 			for _, chunk in ipairs(data) do
-				buffer_line = buffer_line .. chunk
+				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
 
+				-- Append the chunk to the buffer
+				buffer = buffer .. chunk
+
+				-- Process complete lines
 				while true do
-					local newline_pos = buffer_line:find("\n")
-					if newline_pos then
-						local line_to_insert = buffer_line:sub(1, newline_pos - 1)
-						vim.api.nvim_buf_set_lines(0, row, row, false, { line_to_insert })
-						row = row + 1
-						col = 0
-						buffer_line = buffer_line:sub(newline_pos + 1)
-					else
+					local line_end = buffer:find("\n")
+					if not line_end then
 						break
 					end
+
+					local line = buffer:sub(1, line_end - 1)
+					buffer = buffer:sub(line_end + 1)
+
+					-- Insert the line
+					vim.api.nvim_buf_set_lines(0, -1, -1, false, { line })
+					debug_file:write("Line inserted: " .. line .. "\n")
 				end
 			end
-
-			if buffer_line ~= "" then
-				-- Insert remaining text (which doesn't have a newline yet)
-				vim.api.nvim_buf_set_lines(0, row, row, false, { buffer_line })
-			end
-
-			-- Update the cursor position
-			vim.api.nvim_win_set_cursor(0, { row + 1, col + #buffer_line })
+			debug_file:close()
 		end
 	end
-	-- Function to clean up after job completion
+
+	-- Function to handle job completion
 	local function on_exit()
-		os.remove(tmp_input)
+		-- Insert any remaining text in the buffer
+		if buffer ~= "" then
+			vim.api.nvim_buf_set_lines(0, -1, -1, false, { buffer })
+			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
+			debug_file:write("Final line inserted: " .. buffer .. "\n")
+			debug_file:close()
+		end
+		buffer = "" -- Clear the buffer
 	end
 
 	-- Start the job
