@@ -68,8 +68,6 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 					debug_file:write("Empty chunk detected, new line created. row: " .. row .. ", col: " .. col .. "\n")
 				else
 					for char in chunk:gmatch(".") do
-						-- Write each character to the debug file
-						debug_file:write("Char: " .. vim.inspect(char) .. "\n")
 						if char == "\n" then
 							-- Move to the next line
 							row = row + 1
@@ -83,7 +81,6 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 							-- Insert the character at the current cursor position
 							vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
 							col = col + 1
-							debug_file:write("Character inserted, row: " .. row .. ", col: " .. col .. "\n")
 						end
 					end
 				end
