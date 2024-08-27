@@ -51,7 +51,6 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 		end
 	end
 
-	-- Function to handle job output
 	local function on_stdout(_, data)
 		if data then
 			-- Open a debug file
@@ -60,28 +59,26 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 				-- Write the raw chunk to the debug file
 				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
 
-				if chunk == "" then
-					-- Create a new line when the chunk is an empty string
-					row = row + 1
-					col = 0
-					vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-					debug_file:write("Empty chunk detected, new line created. row: " .. row .. ", col: " .. col .. "\n")
-				else
-					for char in chunk:gmatch(".") do
-						if char == "\n" then
-							-- Move to the next line
-							row = row + 1
-							col = 0
-							-- If we're at the end of the buffer, add a new line
-							if row == vim.api.nvim_buf_line_count(0) then
-								vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-							end
-							debug_file:write("Newline detected, row: " .. row .. ", col: " .. col .. "\n")
-						else
-							-- Insert the character at the current cursor position
-							vim.api.nvim_buf_set_text(0, row, col, row, col, { char })
-							col = col + 1
-						end
+				-- Split the chunk by newlines
+				local lines = vim.split(chunk, "\n", true)
+				for i, line in ipairs(lines) do
+					if i > 1 or (i == 1 and chunk:sub(1, 1) == "\n") then
+						-- Start a new line
+						row = row + 1
+						col = 0
+						vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
+						debug_file:write("New line created. row: " .. row .. ", col: " .. col .. "\n")
+					end
+
+					if line ~= "" then
+						-- Insert the line at the current cursor position
+						vim.api.nvim_buf_set_text(0, row, col, row, col, { line })
+						col = col + #line
+					end
+
+					-- If this is the last line and the chunk doesn't end with a newline, don't start a new line
+					if i == #lines and chunk:sub(-1) ~= "\n" then
+						break
 					end
 				end
 			end
