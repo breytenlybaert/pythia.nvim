@@ -87,7 +87,6 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 			end
 			-- Update the cursor position
 			vim.api.nvim_win_set_cursor(0, { row + 1, col }) -- Convert back to 1-based index
-			debug_file:write("Cursor updated, row: " .. (row + 1) .. ", col: " .. col .. "\n")
 			-- Close the debug file
 			debug_file:close()
 		end
