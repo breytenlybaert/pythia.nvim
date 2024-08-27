@@ -53,29 +53,31 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 
 	local function on_stdout(_, data)
 		if data then
-			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
+			local buffer_line = ""
 			for _, chunk in ipairs(data) do
-				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
+				buffer_line = buffer_line .. chunk
 
-				-- Split the chunk by newlines, including empty lines
-				local lines = vim.split(chunk, "\n", true)
-				for i, line in ipairs(lines) do
-					-- Always start a new line, except for the first line of the first chunk
-					if row > 0 or i > 1 then
+				while true do
+					local newline_pos = buffer_line:find("\n")
+					if newline_pos then
+						local line_to_insert = buffer_line:sub(1, newline_pos - 1)
+						vim.api.nvim_buf_set_lines(0, row, row, false, { line_to_insert })
 						row = row + 1
 						col = 0
-						vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-						debug_file:write("New line created. row: " .. row .. ", col: " .. col .. "\n")
+						buffer_line = buffer_line:sub(newline_pos + 1)
+					else
+						break
 					end
-
-					-- Insert the line at the current cursor position
-					vim.api.nvim_buf_set_text(0, row, col, row, col, { line })
-					col = col + #line
-					debug_file:write("Text inserted. row: " .. row .. ", col: " .. col .. ", text: " .. line .. "\n")
 				end
 			end
-			vim.api.nvim_win_set_cursor(0, { row + 1, col })
-			debug_file:close()
+
+			if buffer_line ~= "" then
+				-- Insert remaining text (which doesn't have a newline yet)
+				vim.api.nvim_buf_set_lines(0, row, row, false, { buffer_line })
+			end
+
+			-- Update the cursor position
+			vim.api.nvim_win_set_cursor(0, { row + 1, col + #buffer_line })
 		end
 	end
 	-- Function to clean up after job completion
