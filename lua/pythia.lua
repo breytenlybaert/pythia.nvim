@@ -50,29 +50,36 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 			for _, chunk in ipairs(data) do
 				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
 
-				for i = 1, #chunk do
-					local char = chunk:sub(i, i)
-					if char == "\r" then
-						-- Move cursor to the beginning of the line
-						col = 0
-						-- Clear the current line
-						vim.api.nvim_buf_set_lines(0, row, row + 1, false, { "" })
-					elseif char == "\n" then
-						-- Move to the next line
+				-- Split the chunk by newlines, preserving empty lines
+				local lines = vim.split(chunk, "\n", true)
+
+				for i, line in ipairs(lines) do
+					if i > 1 or (i == 1 and chunk:sub(1, 1) == "\n") then
+						-- Start a new line
 						row = row + 1
 						col = 0
 						vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-					else
-						-- Get the current line
-						local line = vim.api.nvim_buf_get_lines(0, row, row + 1, false)[1]
-						-- Insert or replace the character
-						if col < #line then
-							line = line:sub(1, col) .. char .. line:sub(col + 2)
+					end
+
+					for j = 1, #line do
+						local char = line:sub(j, j)
+						if char == "\r" then
+							-- Move cursor to the beginning of the line
+							col = 0
+							-- Clear the current line
+							vim.api.nvim_buf_set_lines(0, row, row + 1, false, { "" })
 						else
-							line = line .. char
+							-- Get the current line
+							local current_line = vim.api.nvim_buf_get_lines(0, row, row + 1, false)[1]
+							-- Insert or replace the character
+							if col < #current_line then
+								current_line = current_line:sub(1, col) .. char .. current_line:sub(col + 2)
+							else
+								current_line = current_line .. char
+							end
+							vim.api.nvim_buf_set_lines(0, row, row + 1, false, { current_line })
+							col = col + 1
 						end
-						vim.api.nvim_buf_set_lines(0, row, row + 1, false, { line })
-						col = col + 1
 					end
 
 					-- Update the cursor position
