@@ -22,16 +22,9 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 	input_file:write(input_content)
 	input_file:close()
 
-	-- Run the llm command and stream its output
+	-- Run the llm command and capture its output
 	local handle = io.popen(string.format("llm < %s", tmp_input), "r")
-	local lines = {}
-	local start_row = vim.api.nvim_buf_line_count(0)
-	for line in handle:lines() do
-		table.insert(lines, line)
-		vim.api.nvim_buf_set_lines(0, start_row, -1, false, { line })
-		start_row = start_row + 1
-		vim.cmd("redraw")
-	end
+	local raw_output = handle:read("*a")
 	handle:close()
 
 	-- Log the raw output
@@ -40,20 +33,20 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 	debug_file:write(vim.inspect(raw_output))
 	debug_file:close()
 
-	-- Process the output (no longer needed as we're streaming)
-	-- local lines = {}
-	-- for line in (raw_output .. "\n"):gmatch("(.-)\n") do
-	-- 	table.insert(lines, line)
-	-- end
+	-- Process the output
+	local lines = {}
+	for line in (raw_output .. "\n"):gmatch("(.-)\n") do
+		table.insert(lines, line)
+	end
 
-	-- Determine where to insert the output (no longer needed as we're streaming)
-	-- local start_row = 0
-	-- if not replace_file then
-	-- 	start_row = vim.api.nvim_buf_line_count(0)
-	-- end
+	-- Determine where to insert the output
+	local start_row = 0
+	if not replace_file then
+		start_row = vim.api.nvim_buf_line_count(0)
+	end
 
-	-- Insert the lines into the buffer (no longer needed as we're streaming)
-	-- vim.api.nvim_buf_set_lines(0, start_row, -1, false, lines)
+	-- Insert the lines into the buffer
+	vim.api.nvim_buf_set_lines(0, start_row, -1, false, lines)
 
 	-- Clean up
 	os.remove(tmp_input)
