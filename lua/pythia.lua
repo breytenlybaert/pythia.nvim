@@ -34,34 +34,59 @@ local function send_to_llm(text, replace_file, system_message, instruction, titl
 	input_file:write(input_content)
 	input_file:close()
 
-	-- Run the llm command and capture its output
-	local handle = io.popen(string.format("llm < %s", tmp_input), "r")
-	local raw_output = handle:read("*a")
-	handle:close()
-
-	-- Log the raw output
-	local debug_file = io.open("/tmp/neovim_llm_debug.log", "w")
-	debug_file:write("Raw llm output:\n")
-	debug_file:write(vim.inspect(raw_output))
-	debug_file:close()
-
-	-- Process the output
-	local lines = {}
-	for line in (raw_output .. "\n"):gmatch("(.-)\n") do
-		table.insert(lines, line)
+	-- Prepare buffer for output
+	local row = 0
+	if replace_file then
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+	else
+		row = vim.api.nvim_buf_line_count(0)
+		vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
 	end
 
-	-- Determine where to insert the output
-	local start_row = 0
-	if not replace_file then
-		start_row = vim.api.nvim_buf_line_count(0)
+	local buffer = ""
+	local function on_stdout(_, data)
+		if data then
+			local debug_file = io.open("/tmp/neovim_llm_debug.log", "a")
+			for _, chunk in ipairs(data) do
+				debug_file:write("Raw chunk: " .. vim.inspect(chunk) .. "\n")
+				buffer = buffer .. chunk
+
+				while true do
+					local newline_pos = buffer:find("\n")
+					if not newline_pos then
+						break
+					end
+
+					local line = buffer:sub(1, newline_pos - 1)
+					buffer = buffer:sub(newline_pos + 1)
+
+					vim.schedule(function()
+						vim.api.nvim_buf_set_lines(0, row, row + 1, false, { line })
+						row = row + 1
+					end)
+				end
+			end
+			debug_file:close()
+		end
 	end
 
-	-- Insert the lines into the buffer
-	vim.api.nvim_buf_set_lines(0, start_row, -1, false, lines)
+	local function on_exit()
+		if buffer ~= "" then
+			vim.schedule(function()
+				vim.api.nvim_buf_set_lines(0, row, row + 1, false, { buffer })
+			end)
+		end
+		os.remove(tmp_input)
+	end
 
-	-- Clean up
-	os.remove(tmp_input)
+	-- Start the job
+	vim.fn.jobstart(string.format("llm < %s", tmp_input), {
+		on_stdout = on_stdout,
+		on_stderr = on_stdout, -- Handle stderr same as stdout
+		on_exit = on_exit,
+		stdout_buffered = false,
+		stderr_buffered = false,
+	})
 end
 
 -- Function to send the entire file content to llm
