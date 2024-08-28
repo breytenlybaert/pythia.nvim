@@ -12,37 +12,57 @@ local function find_insert_position()
 	return line_count
 end
 
--- Function to send text to llm and stream the result
 local function send_to_llm(text, replace_file, system_message, instruction, title)
-	-- Create a temporary file to store the input
-	local tmp_input = os.tmpname()
+    -- Create a temporary file to store the input
+    local tmp_input = os.tmpname()
 
-	-- Prepare the input content
-	local input_content = ""
-	if system_message then
-		input_content = input_content .. "System: " .. system_message .. "\n\n"
-	end
-	if instruction then
-		input_content = input_content .. "Instruction: " .. instruction .. "\n\n"
-	end
-	if title then
-		input_content = input_content .. "Title: " .. title .. "\n\n"
-	end
-	input_content = input_content .. "Content:\n" .. text
+    -- Prepare the input content
+    local input_content = ""
+    if system_message then
+        input_content = input_content .. "System: " .. system_message .. "\n\n"
+    end
+    if instruction then
+        input_content = input_content .. "Instruction: " .. instruction .. "\n\n"
+    end
+    if title then
+        input_content = input_content .. "Title: " .. title .. "\n\n"
+    end
+    input_content = input_content .. "Content:\n" .. text
 
-	-- Write the input content to the temporary file
-	local input_file = io.open(tmp_input, "wb") -- Open in binary mode
-	input_file:write(input_content)
-	input_file:close()
+    -- Write the input content to the temporary file
+    local input_file = io.open(tmp_input, "w")
+    input_file:write(input_content)
+    input_file:close()
 
-	local raw_output = ""
-	local row, col = 0, 0
-	if replace_file then
-		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
-	else
-		row = vim.api.nvim_buf_line_count(0)
-		vim.api.nvim_buf_set_lines(0, row, row, false, { "" })
-	end
+    -- Run the llm command and capture its output
+    local handle = io.popen(string.format("llm < %s", tmp_input), "r")
+    local raw_output = handle:read("*a")
+    handle:close()
+
+    -- Log the raw output
+    local debug_file = io.open("/tmp/neovim_llm_debug.log", "w")
+    debug_file:write("Raw llm output:\n")
+    debug_file:write(vim.inspect(raw_output))
+    debug_file:close()
+
+    -- Process the output
+    local lines = {}
+    for line in (raw_output.."\n"):gmatch("(.-)\n") do
+        table.insert(lines, line)
+    end
+
+    -- Determine where to insert the output
+    local start_row = 0
+    if not replace_file then
+        start_row = vim.api.nvim_buf_line_count(0)
+    end
+
+    -- Insert the lines into the buffer
+    vim.api.nvim_buf_set_lines(0, start_row, -1, false, lines)
+
+    -- Clean up
+    os.remove(tmp_input)
+end
 
 	local function on_stdout(_, data)
 		if data then
